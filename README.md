@@ -1,7 +1,7 @@
 # favifetch
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/codehat/favifetch.svg)](https://pkg.go.dev/github.com/codehat/favifetch)
-[![Go Report Card](https://goreportcard.com/badge/github.com/codehat/favifetch)](https://goreportcard.com/report/github.com/codehat/favifetch)
+[![Go Reference](https://pkg.go.dev/badge/github.com/kodehat/favifetch.svg)](https://pkg.go.dev/github.com/kodehat/favifetch)
+[![Go Report Card](https://goreportcard.com/badge/github.com/kodehat/favifetch)](https://goreportcard.com/report/github.com/kodehat/favifetch)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 > **Based on [Vemetric/favicon-api](https://github.com/Vemetric/favicon-api)** — a TypeScript/Bun favicon API service.  
@@ -24,7 +24,7 @@ A Go library for discovering and fetching website favicons. Automatically finds 
 ## Installation
 
 ```bash
-go get github.com/codehat/favifetch
+go get github.com/kodehat/favifetch
 ```
 
 ## Quick Start
@@ -37,7 +37,7 @@ import (
     "fmt"
     "os"
 
-    "github.com/codehat/favifetch"
+    "github.com/kodehat/favifetch"
 )
 
 func main() {

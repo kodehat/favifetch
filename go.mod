@@ -1,4 +1,4 @@
-module github.com/codehat/favifetch
+module github.com/kodehat/favifetch
 
 go 1.26.5
 
