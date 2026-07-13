@@ -39,8 +39,8 @@ func detectFormat(data []byte, formatHint, mimeHint string) string {
 		data[8] == 0x57 && data[9] == 0x45 && data[10] == 0x42 && data[11] == 0x50:
 		return "webp"
 
-	// SVG: check for <svg tag in first 256 bytes
-	case bytes.Contains(bytes.ToLower(data[:minInt(256, len(data))]), []byte("<svg")):
+	// SVG: check for <svg tag (scan all data — SVGs can have long XML prologs)
+	case bytes.Contains(bytes.ToLower(data), []byte("<svg")):
 		return "svg"
 	}
 

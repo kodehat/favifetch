@@ -9,7 +9,9 @@ import (
 	// Import image formats for decoding
 	_ "image/gif"
 
-	"github.com/chai2010/webp"
+	"github.com/HugoSmits86/nativewebp"
+	"github.com/srwiley/oksvg"
+	"github.com/srwiley/rasterx"
 	"golang.org/x/image/draw"
 )
 
@@ -20,7 +22,7 @@ func processImage(data []byte, opts *Options) ([]byte, string, int, int, error) 
 	size := opts.Size
 	targetFormat := opts.Format
 
-	// SVG pass-through unless raster conversion is explicitly requested
+	// SVG: rasterize if a raster format is requested
 	if format == "svg" {
 		if targetFormat == "" || targetFormat == "svg" {
 			w, h := extractSVGDimensions(data)
@@ -29,10 +31,23 @@ func processImage(data []byte, opts *Options) ([]byte, string, int, int, error) 
 			}
 			return data, "svg", w, h, nil
 		}
-		// SVG to raster conversion requested — not supported without external renderer
-		// Return original SVG
-		w, h := extractSVGDimensions(data)
-		return data, "svg", w, h, nil
+
+		// Rasterize SVG to the requested format
+		rasterized, err := renderSVG(data, size)
+		if err != nil {
+			// Fall back to returning original SVG
+			w, h := extractSVGDimensions(data)
+			return data, "svg", w, h, nil
+		}
+
+		encoded, err := encodeImage(rasterized, targetFormat)
+		if err != nil {
+			w, h := extractSVGDimensions(data)
+			return data, "svg", w, h, nil
+		}
+
+		bounds := rasterized.Bounds()
+		return encoded, normalizeFormat(targetFormat), bounds.Dx(), bounds.Dy(), nil
 	}
 
 	// Decode the image
@@ -84,7 +99,7 @@ func decodeImage(data []byte) (image.Image, string, error) {
 	}
 
 	// Try WebP decoder
-	if img, err := webp.Decode(bytes.NewReader(data)); err == nil {
+	if img, err := nativewebp.Decode(bytes.NewReader(data)); err == nil {
 		return img, "webp", nil
 	}
 
@@ -98,11 +113,9 @@ func decodeDimensions(data []byte, format string) (int, int) {
 		return cfg.Width, cfg.Height
 	}
 
-	// Try WebP decode config
-	img, err := webp.Decode(bytes.NewReader(data))
+	cfg, err = nativewebp.DecodeConfig(bytes.NewReader(data))
 	if err == nil {
-		b := img.Bounds()
-		return b.Dx(), b.Dy()
+		return cfg.Width, cfg.Height
 	}
 
 	return 0, 0
@@ -160,13 +173,52 @@ func encodeImage(img image.Image, format string) ([]byte, error) {
 		err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: 85})
 		return buf.Bytes(), err
 	case "webp":
-		err := webp.Encode(&buf, img, &webp.Options{Quality: 90})
+		err := nativewebp.Encode(&buf, img, &nativewebp.Options{CompressionLevel: nativewebp.DefaultCompression})
 		return buf.Bytes(), err
 	default:
 		// Default to PNG
 		err := png.Encode(&buf, img)
 		return buf.Bytes(), err
 	}
+}
+
+// renderSVG rasterizes an SVG to an image.Image using oksvg + rasterx.
+// If size is 0, the SVG's intrinsic dimensions (or viewBox) are used.
+func renderSVG(data []byte, size int) (image.Image, error) {
+	icon, err := oksvg.ReadIconStream(bytes.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
+
+	// Determine output dimensions
+	w := int(icon.ViewBox.W)
+	h := int(icon.ViewBox.H)
+	if size > 0 {
+		if w > h {
+			h = size * h / w
+			w = size
+		} else if h > 0 {
+			w = size * w / h
+			h = size
+		} else {
+			w, h = size, size
+		}
+	}
+	if w < 1 {
+		w = 256
+	}
+	if h < 1 {
+		h = 256
+	}
+
+	icon.SetTarget(0, 0, float64(w), float64(h))
+
+	img := image.NewRGBA(image.Rect(0, 0, w, h))
+	scanner := rasterx.NewScannerGV(w, h, img, img.Bounds())
+	dasher := rasterx.NewDasher(w, h, scanner)
+	icon.Draw(dasher, 1.0)
+
+	return img, nil
 }
 
 func normalizeFormat(format string) string {

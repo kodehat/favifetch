@@ -744,13 +744,16 @@ func TestProcessImage(t *testing.T) {
 		t.Errorf("sized svg dims = (%d,%d), want (48,48)", w, h)
 	}
 
-	// SVG to raster conversion request — should still return SVG (no rasterizer)
-	data, fmtStr, _, _, err = processImage(svgData, DefaultOptions(WithFormat("png")))
+	// SVG to raster conversion — now supported via oksvg/rasterx
+	data, fmtStr, w, h, err = processImage(svgData, DefaultOptions(WithFormat("png")))
 	if err != nil {
 		t.Fatalf("processImage svg to raster error: %v", err)
 	}
-	if fmtStr != "svg" {
-		t.Errorf("format = %q, want svg (no rasterizer)", fmtStr)
+	if fmtStr != "png" {
+		t.Errorf("format = %q, want png", fmtStr)
+	}
+	if w <= 0 || h <= 0 {
+		t.Errorf("rasterized dims = (%d,%d), want > 0", w, h)
 	}
 
 	// PNG resize

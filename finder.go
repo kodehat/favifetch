@@ -170,7 +170,7 @@ func fetchBestFavicon(ctx context.Context, client *http.Client, sources []favico
 // hasValidImageMagic checks that the data has valid image magic bytes or is SVG.
 func hasValidImageMagic(data []byte, format string) bool {
 	if format == "svg" {
-		return bytes.Contains(bytes.ToLower(data[:minInt(256, len(data))]), []byte("<svg"))
+		return bytes.Contains(bytes.ToLower(data), []byte("<svg"))
 	}
 	if len(data) < 2 {
 		return false
