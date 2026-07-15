@@ -258,3 +258,6 @@ $RECYCLE.BIN/
 *.lnk
 
 # End of https://www.toptal.com/developers/gitignore/api/go,node,linux,macos,windows,visualstudiocode
+
+# Temp dir from example.go
+tmp/

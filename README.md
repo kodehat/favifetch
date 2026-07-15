@@ -192,4 +192,4 @@ Built with:
 
 ## License
 
-MIT — see the original [Vemetric/favicon-api](https://github.com/Vemetric/favicon-api) repository for details.
+MIT
