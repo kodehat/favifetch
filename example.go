@@ -58,7 +58,7 @@ func main() {
 	fmt.Println("=== 3. Resize to 256×256 + convert to PNG ===")
 	png, err := favifetch.Fetch(ctx, domain,
 		favifetch.WithSize(256),
-		favifetch.WithFormat("png"),
+		favifetch.WithFormat(favifetch.TargetPNG),
 	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -71,7 +71,7 @@ func main() {
 	fmt.Println("=== 4. Resize to 64×64 + convert to WebP ===")
 	webp, err := favifetch.Fetch(ctx, domain,
 		favifetch.WithSize(64),
-		favifetch.WithFormat("webp"),
+		favifetch.WithFormat(favifetch.TargetWebP),
 	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -83,7 +83,7 @@ func main() {
 	// 5. Convert to JPEG (no resize).
 	fmt.Println("=== 5. Convert to JPG (original size) ===")
 	jpg, err := favifetch.Fetch(ctx, domain,
-		favifetch.WithFormat("jpg"),
+		favifetch.WithFormat(favifetch.TargetJPEG),
 	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)

@@ -17,19 +17,19 @@ import (
 
 // processImage resizes and/or converts the format of an image buffer.
 // Returns the processed data, format, width, height.
-func processImage(data []byte, opts *Options) ([]byte, string, int, int, error) {
+func processImage(data []byte, opts *Options) ([]byte, DetectedFormat, int, int, error) {
 	format := detectFormat(data, "", "")
 	size := opts.Size
 	targetFormat := opts.Format
 
 	// SVG: rasterize if a raster format is requested
-	if format == "svg" {
-		if targetFormat == "" || targetFormat == "svg" {
+	if format == FormatSVG {
+		if targetFormat == TargetUnspecified {
 			w, h := extractSVGDimensions(data)
 			if size > 0 {
 				w, h = size, size
 			}
-			return data, "svg", w, h, nil
+			return data, FormatSVG, w, h, nil
 		}
 
 		// Rasterize SVG to the requested format
@@ -37,24 +37,24 @@ func processImage(data []byte, opts *Options) ([]byte, string, int, int, error) 
 		if err != nil {
 			// Fall back to returning original SVG
 			w, h := extractSVGDimensions(data)
-			return data, "svg", w, h, nil
+			return data, FormatSVG, w, h, nil
 		}
 
 		encoded, err := encodeImage(rasterized, targetFormat)
 		if err != nil {
 			w, h := extractSVGDimensions(data)
-			return data, "svg", w, h, nil
+			return data, FormatSVG, w, h, nil
 		}
 
 		bounds := rasterized.Bounds()
-		return encoded, normalizeFormat(targetFormat), bounds.Dx(), bounds.Dy(), nil
+		return encoded, targetFormat.Detected(), bounds.Dx(), bounds.Dy(), nil
 	}
 
 	// Decode the image
 	img, _, err := decodeImage(data)
 	if err != nil {
 		// Can't decode, return original
-		w, h := decodeDimensions(data, format)
+		w, h := decodeDimensions(data)
 		return data, format, w, h, nil
 	}
 
@@ -63,7 +63,7 @@ func processImage(data []byte, opts *Options) ([]byte, string, int, int, error) 
 	srcH := srcBounds.Dy()
 
 	// If no processing needed, return as-is
-	if size == 0 && (targetFormat == "" || targetFormat == format) {
+	if size == 0 && (targetFormat == TargetUnspecified || targetFormat.Detected() == format) {
 		return data, format, srcW, srcH, nil
 	}
 
@@ -73,9 +73,15 @@ func processImage(data []byte, opts *Options) ([]byte, string, int, int, error) 
 		processed = resizeImage(img, size)
 	}
 
-	// Encode to target format
-	if targetFormat == "" {
-		targetFormat = format
+	// Determine output format
+	outFormat := format
+	if targetFormat != TargetUnspecified {
+		outFormat = targetFormat.Detected()
+	}
+
+	// If no target format and no actual resize happened (same dimensions), skip encoding
+	if targetFormat == TargetUnspecified && size == 0 {
+		return data, format, srcW, srcH, nil
 	}
 
 	bounds := processed.Bounds()
@@ -87,7 +93,7 @@ func processImage(data []byte, opts *Options) ([]byte, string, int, int, error) 
 		return data, format, srcW, srcH, nil
 	}
 
-	return encoded, targetFormat, outW, outH, nil
+	return encoded, outFormat, outW, outH, nil
 }
 
 // decodeImage decodes image data into an image.Image. Supports PNG, JPEG, GIF, WebP.
@@ -107,7 +113,7 @@ func decodeImage(data []byte) (image.Image, string, error) {
 }
 
 // decodeDimensions returns the dimensions of an image without fully decoding the pixel data.
-func decodeDimensions(data []byte, format string) (int, int) {
+func decodeDimensions(data []byte) (int, int) {
 	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
 	if err == nil {
 		return cfg.Width, cfg.Height
@@ -163,20 +169,20 @@ func resizeImage(img image.Image, size int) image.Image {
 }
 
 // encodeImage encodes an image.Image to the specified format.
-func encodeImage(img image.Image, format string) ([]byte, error) {
+func encodeImage(img image.Image, format TargetFormat) ([]byte, error) {
 	var buf bytes.Buffer
-	switch normalizeFormat(format) {
-	case "png":
+	switch format {
+	case TargetPNG:
 		err := png.Encode(&buf, img)
 		return buf.Bytes(), err
-	case "jpg", "jpeg":
+	case TargetJPEG:
 		err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: 85})
 		return buf.Bytes(), err
-	case "webp":
+	case TargetWebP:
 		err := nativewebp.Encode(&buf, img, &nativewebp.Options{CompressionLevel: nativewebp.DefaultCompression})
 		return buf.Bytes(), err
 	default:
-		// Default to PNG
+		// TargetUnspecified — default to PNG
 		err := png.Encode(&buf, img)
 		return buf.Bytes(), err
 	}
@@ -221,11 +227,3 @@ func renderSVG(data []byte, size int) (image.Image, error) {
 	return img, nil
 }
 
-func normalizeFormat(format string) string {
-	switch format {
-	case "jpeg":
-		return "jpg"
-	default:
-		return format
-	}
-}

@@ -148,7 +148,7 @@ func fetchBestFavicon(ctx context.Context, client *http.Client, sources []favico
 		}
 
 		format := detectFormat(data, src.Format, mimeType)
-		if format == "" || !hasValidImageMagic(data, format) {
+		if format == FormatUnknown || !hasValidImageMagic(data, format) {
 			continue
 		}
 
@@ -168,8 +168,8 @@ func fetchBestFavicon(ctx context.Context, client *http.Client, sources []favico
 }
 
 // hasValidImageMagic checks that the data has valid image magic bytes or is SVG.
-func hasValidImageMagic(data []byte, format string) bool {
-	if format == "svg" {
+func hasValidImageMagic(data []byte, format DetectedFormat) bool {
+	if format == FormatSVG {
 		return bytes.Contains(bytes.ToLower(data), []byte("<svg"))
 	}
 	if len(data) < 2 {
@@ -177,18 +177,18 @@ func hasValidImageMagic(data []byte, format string) bool {
 	}
 	switch {
 	case len(data) >= 4 && data[0] == 0x89 && data[1] == 0x50 && data[2] == 0x4E && data[3] == 0x47:
-		return format == "png"
+		return format == FormatPNG
 	case data[0] == 0xFF && data[1] == 0xD8:
-		return format == "jpg" || format == "jpeg"
+		return format == FormatJPEG
 	case len(data) >= 3 && data[0] == 0x47 && data[1] == 0x49 && data[2] == 0x46:
-		return format == "gif"
+		return format == FormatGIF
 	case len(data) >= 4 && data[0] == 0x00 && data[1] == 0x00 && data[2] == 0x01 && data[3] == 0x00:
-		return format == "ico"
+		return format == FormatICO
 	case data[0] == 0x42 && data[1] == 0x4D:
-		return format == "bmp"
+		return format == FormatBMP
 	case len(data) >= 12 && data[0] == 0x52 && data[1] == 0x49 && data[2] == 0x46 && data[3] == 0x46 &&
 		data[8] == 0x57 && data[9] == 0x45 && data[10] == 0x42 && data[11] == 0x50:
-		return format == "webp"
+		return format == FormatWebP
 	default:
 		return false
 	}
@@ -238,19 +238,19 @@ func detectMimeType(data []byte) string {
 	}
 	format := detectFormat(data, "", "")
 	switch format {
-	case "png":
+	case FormatPNG:
 		return "image/png"
-	case "jpg", "jpeg":
+	case FormatJPEG:
 		return "image/jpeg"
-	case "webp":
+	case FormatWebP:
 		return "image/webp"
-	case "gif":
+	case FormatGIF:
 		return "image/gif"
-	case "ico":
+	case FormatICO:
 		return "image/x-icon"
-	case "svg":
+	case FormatSVG:
 		return "image/svg+xml"
-	case "bmp":
+	case FormatBMP:
 		return "image/bmp"
 	default:
 		return ""

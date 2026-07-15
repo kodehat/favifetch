@@ -46,7 +46,7 @@ func main() {
         os.Exit(1)
     }
 
-    fmt.Printf("Format:  %s\n", result.Format)
+    fmt.Printf("Format:  %s\n", result.Format) // png, svg, etc. (implements Stringer)
     fmt.Printf("Size:    %dx%d (%d bytes)\n", result.Width, result.Height, result.Size)
     fmt.Printf("Source:  %s\n", result.Source)
     fmt.Printf("URL:     %s\n", result.SourceURL)
@@ -79,7 +79,7 @@ Resize to 128×128 and convert to PNG:
 ```go
 result, err := favifetch.Fetch(ctx, "github.com",
     favifetch.WithSize(128),
-    favifetch.WithFormat("png"),
+    favifetch.WithFormat(favifetch.TargetPNG),
 )
 ```
 
@@ -133,19 +133,19 @@ Returns all discovered favicon sources without fetching any image.
 
 ```go
 type FaviconResult struct {
-    Data      []byte // Raw image bytes
-    Format    string // "png", "jpg", "svg", "ico", "webp", "gif", "bmp"
-    Width     int    // Image width in pixels
-    Height    int    // Image height in pixels
-    Source    string // "link-tag", "manifest", "fallback", "fallback-api"
-    SourceURL string // Original URL the favicon was fetched from
-    Size      int    // Size of Data in bytes
+    Data      []byte          // Raw image bytes
+    Format    DetectedFormat  // png, jpg, svg, ico, webp, gif, bmp
+    Width     int             // Image width in pixels
+    Height    int             // Image height in pixels
+    Source    string          // "link-tag", "manifest", "fallback", "fallback-api"
+    SourceURL string          // Original URL the favicon was fetched from
+    Size      int             // Size of Data in bytes
 }
 
 type DiscoveredSource struct {
     URL    string
     Size   int
-    Format string
+    Format DetectedFormat
     Source string
     Score  int
 }
@@ -162,7 +162,7 @@ type DiscoveredSource struct {
 | `WithBlockPrivateIPs(bool)` | `true` | Block private IP ranges |
 | `WithFallbackAPI(bool)` | `true` | Use Google favicon API fallback |
 | `WithSize(px)` | `0` | Resize to px×px (0 = no resize) |
-| `WithFormat(f)` | `""` | Convert to `"png"`, `"jpg"`, `"webp"` |
+| `WithFormat(f)` | `TargetUnspecified` | Convert to `TargetPNG`, `TargetJPEG`, or `TargetWebP` |
 | `WithHTTPClient(c)` | `http.DefaultClient` | Custom HTTP client |
 
 ## Favicon Sources & Scoring
@@ -188,7 +188,8 @@ Based on [Vemetric/favicon-api](https://github.com/Vemetric/favicon-api), a Type
 Built with:
 - [`golang.org/x/net/html`](https://pkg.go.dev/golang.org/x/net/html) — HTML parsing
 - [`golang.org/x/image`](https://pkg.go.dev/golang.org/x/image) — Image resampling
-- [`github.com/chai2010/webp`](https://github.com/chai2010/webp) — WebP encode/decode
+- [`github.com/HugoSmits86/nativewebp`](https://github.com/HugoSmits86/nativewebp) — WebP encode/decode
+- [`github.com/srwiley/oksvg`](https://github.com/srwiley/oksvg) + [`github.com/srwiley/rasterx`](https://github.com/srwiley/rasterx) — SVG rasterization
 
 ## License
 

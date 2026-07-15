@@ -26,8 +26,8 @@ type FaviconResult struct {
 	// Data is the raw image bytes (PNG, SVG, ICO, etc.)
 	Data []byte
 
-	// Format is the detected image format: "png", "jpg", "svg", "ico", "webp", "gif", "bmp"
-	Format string
+	// Format is the detected image format.
+	Format DetectedFormat
 
 	// Width and Height are the image dimensions in pixels.
 	Width, Height int
@@ -88,7 +88,7 @@ func Fetch(ctx context.Context, rawURL string, opts ...Option) (*FaviconResult, 
 	}
 
 	// Process the image (resize, format convert) if requested
-	if options.Size > 0 || options.Format != "" {
+	if options.Size > 0 || options.Format != TargetUnspecified {
 		processed, newFormat, w, h, err := processImage(result.Data, options)
 		if err == nil {
 			result.Data = processed
@@ -130,7 +130,7 @@ func Discover(ctx context.Context, rawURL string, opts ...Option) ([]DiscoveredS
 		result[i] = DiscoveredSource{
 			URL:    s.URL,
 			Size:   s.Size,
-			Format: s.Format,
+			Format: detectFormatFromHint(s.Format),
 			Source: s.Source,
 			Score:  s.Score,
 		}
@@ -142,7 +142,7 @@ func Discover(ctx context.Context, rawURL string, opts ...Option) ([]DiscoveredS
 type DiscoveredSource struct {
 	URL    string
 	Size   int
-	Format string
+	Format DetectedFormat
 	Source string
 	Score  int
 }

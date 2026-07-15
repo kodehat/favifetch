@@ -30,9 +30,8 @@ type Options struct {
 	// 0 means no resizing.
 	Size int
 
-	// Format is the desired output format: "png", "jpg", "jpeg", "webp".
-	// Empty means keep original format.
-	Format string
+	// Format is the desired output format. Zero value (TargetUnspecified) means keep original.
+	Format TargetFormat
 
 	// HTTPClient is the *http.Client to use for all requests. If nil, a default
 	// client is created from the other options.
@@ -50,7 +49,7 @@ func DefaultOptions(opts ...Option) *Options {
 		BlockPrivateIps: true,
 		UseFallbackAPI:  true,
 		Size:            0,
-		Format:          "",
+		Format:          TargetUnspecified,
 	}
 	for _, opt := range opts {
 		opt(o)
@@ -96,8 +95,8 @@ func WithSize(size int) Option {
 	return func(o *Options) { o.Size = size }
 }
 
-// WithFormat sets the desired output format (png, jpg, jpeg, webp).
-func WithFormat(format string) Option {
+// WithFormat sets the desired output format.
+func WithFormat(format TargetFormat) Option {
 	return func(o *Options) { o.Format = format }
 }
 

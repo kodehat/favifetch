@@ -263,58 +263,58 @@ func TestCalculateScoreExtended(t *testing.T) {
 func TestDetectFormatExtended(t *testing.T) {
 	// WebP magic bytes
 	webpData := []byte{0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50}
-	if f := detectFormat(webpData, "", ""); f != "webp" {
-		t.Errorf("detectFormat webp = %q, want webp", f)
+	if f := detectFormat(webpData, "", ""); f != FormatWebP {
+		t.Errorf("detectFormat webp = %v, want FormatWebP", f)
 	}
 
 	// Format hint fallback
-	if f := detectFormat([]byte{0x00, 0x01}, "image/svg+xml", ""); f != "svg" {
-		t.Errorf("detectFormat svg hint = %q, want svg", f)
+	if f := detectFormat([]byte{0x00, 0x01}, "image/svg+xml", ""); f != FormatSVG {
+		t.Errorf("detectFormat svg hint = %v, want FormatSVG", f)
 	}
-	if f := detectFormat([]byte{0x00, 0x01}, "image/jpeg", ""); f != "jpg" {
-		t.Errorf("detectFormat jpg hint = %q, want jpg", f)
+	if f := detectFormat([]byte{0x00, 0x01}, "image/jpeg", ""); f != FormatJPEG {
+		t.Errorf("detectFormat jpg hint = %v, want FormatJPEG", f)
 	}
-	if f := detectFormat([]byte{0x00, 0x01}, "image/gif", ""); f != "gif" {
-		t.Errorf("detectFormat gif hint = %q, want gif", f)
+	if f := detectFormat([]byte{0x00, 0x01}, "image/gif", ""); f != FormatGIF {
+		t.Errorf("detectFormat gif hint = %v, want FormatGIF", f)
 	}
-	if f := detectFormat([]byte{0x00, 0x01}, "image/webp", ""); f != "webp" {
-		t.Errorf("detectFormat webp hint = %q, want webp", f)
+	if f := detectFormat([]byte{0x00, 0x01}, "image/webp", ""); f != FormatWebP {
+		t.Errorf("detectFormat webp hint = %v, want FormatWebP", f)
 	}
-	if f := detectFormat([]byte{0x00, 0x01}, "image/x-icon", ""); f != "ico" {
-		t.Errorf("detectFormat ico hint = %q, want ico", f)
+	if f := detectFormat([]byte{0x00, 0x01}, "image/x-icon", ""); f != FormatICO {
+		t.Errorf("detectFormat ico hint = %v, want FormatICO", f)
 	}
-	if f := detectFormat([]byte{0x00, 0x01}, "image/vnd.microsoft.icon", ""); f != "ico" {
-		t.Errorf("detectFormat .icon hint = %q, want ico", f)
+	if f := detectFormat([]byte{0x00, 0x01}, "image/vnd.microsoft.icon", ""); f != FormatICO {
+		t.Errorf("detectFormat .icon hint = %v, want FormatICO", f)
 	}
 
 	// MIME hint fallback
-	if f := detectFormat([]byte{0x00, 0x01}, "", "image/png"); f != "png" {
-		t.Errorf("detectFormat png mime = %q, want png", f)
+	if f := detectFormat([]byte{0x00, 0x01}, "", "image/png"); f != FormatPNG {
+		t.Errorf("detectFormat png mime = %v, want FormatPNG", f)
 	}
-	if f := detectFormat([]byte{0x00, 0x01}, "", "image/svg+xml"); f != "svg" {
-		t.Errorf("detectFormat svg mime = %q, want svg", f)
+	if f := detectFormat([]byte{0x00, 0x01}, "", "image/svg+xml"); f != FormatSVG {
+		t.Errorf("detectFormat svg mime = %v, want FormatSVG", f)
 	}
-	if f := detectFormat([]byte{0x00, 0x01}, "", "image/jpeg"); f != "jpg" {
-		t.Errorf("detectFormat jpeg mime = %q, want jpg", f)
+	if f := detectFormat([]byte{0x00, 0x01}, "", "image/jpeg"); f != FormatJPEG {
+		t.Errorf("detectFormat jpeg mime = %v, want FormatJPEG", f)
 	}
-	if f := detectFormat([]byte{0x00, 0x01}, "", "image/gif"); f != "gif" {
-		t.Errorf("detectFormat gif mime = %q, want gif", f)
+	if f := detectFormat([]byte{0x00, 0x01}, "", "image/gif"); f != FormatGIF {
+		t.Errorf("detectFormat gif mime = %v, want FormatGIF", f)
 	}
-	if f := detectFormat([]byte{0x00, 0x01}, "", "image/webp"); f != "webp" {
-		t.Errorf("detectFormat webp mime = %q, want webp", f)
+	if f := detectFormat([]byte{0x00, 0x01}, "", "image/webp"); f != FormatWebP {
+		t.Errorf("detectFormat webp mime = %v, want FormatWebP", f)
 	}
-	if f := detectFormat([]byte{0x00, 0x01}, "", "image/x-icon"); f != "ico" {
-		t.Errorf("detectFormat x-icon mime = %q, want ico", f)
+	if f := detectFormat([]byte{0x00, 0x01}, "", "image/x-icon"); f != FormatICO {
+		t.Errorf("detectFormat x-icon mime = %v, want FormatICO", f)
 	}
 
 	// Default fallback when nothing matches
-	if f := detectFormat([]byte{0x00, 0x01}, "", ""); f != "png" {
-		t.Errorf("detectFormat default = %q, want png", f)
+	if f := detectFormat([]byte{0x00, 0x01}, "", ""); f != FormatUnknown {
+		t.Errorf("detectFormat default = %v, want FormatUnknown", f)
 	}
 
 	// Short data
-	if f := detectFormat([]byte{0x00}, "", ""); f != "" {
-		t.Errorf("detectFormat short data = %q, want empty", f)
+	if f := detectFormat([]byte{0x00}, "", ""); f != FormatUnknown {
+		t.Errorf("detectFormat short data = %v, want FormatUnknown", f)
 	}
 }
 
@@ -336,20 +336,20 @@ func TestMinInt(t *testing.T) {
 
 func TestDetectDimensions(t *testing.T) {
 	// SVG
-	w, h := detectDimensions([]byte(`<svg width="32" height="32"></svg>`), "svg")
+	w, h := detectDimensions([]byte(`<svg width="32" height="32"></svg>`), FormatSVG)
 	if w != 32 || h != 32 {
 		t.Errorf("svg dims = (%d,%d), want (32,32)", w, h)
 	}
 
 	// Raster - use a real PNG
 	buf := createTestPNG(16, 16)
-	w, h = detectDimensions(buf, "png")
+	w, h = detectDimensions(buf, FormatPNG)
 	if w != 16 || h != 16 {
 		t.Errorf("png dims = (%d,%d), want (16,16)", w, h)
 	}
 
 	// Empty data
-	w, h = detectDimensions([]byte{}, "png")
+	w, h = detectDimensions([]byte{}, FormatPNG)
 	if w != 0 || h != 0 {
 		t.Errorf("empty dims = (%d,%d), want (0,0)", w, h)
 	}
@@ -574,8 +574,8 @@ func TestFetchBestFavicon(t *testing.T) {
 	if result == nil {
 		t.Fatal("fetchBestFavicon returned nil")
 	}
-	if result.Format != "png" {
-		t.Errorf("format = %q, want png", result.Format)
+	if result.Format != FormatPNG {
+		t.Errorf("format = %v, want FormatPNG", result.Format)
 	}
 	if result.Source != sourceLinkTag {
 		t.Errorf("source = %q, want %q", result.Source, sourceLinkTag)
@@ -600,8 +600,8 @@ func TestFetchBestFaviconFromDataURL(t *testing.T) {
 	if result == nil {
 		t.Fatal("fetchBestFavicon returned nil")
 	}
-	if result.Format != "png" {
-		t.Errorf("format = %q, want png", result.Format)
+	if result.Format != FormatPNG {
+		t.Errorf("format = %v, want FormatPNG", result.Format)
 	}
 }
 
@@ -725,8 +725,8 @@ func TestProcessImage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("processImage svg error: %v", err)
 	}
-	if fmtStr != "svg" {
-		t.Errorf("format = %q, want svg", fmtStr)
+	if fmtStr != FormatSVG {
+		t.Errorf("format = %v, want FormatSVG", fmtStr)
 	}
 	if w != 100 || h != 100 {
 		t.Errorf("dims = (%d,%d), want (100,100)", w, h)
@@ -745,12 +745,12 @@ func TestProcessImage(t *testing.T) {
 	}
 
 	// SVG to raster conversion — now supported via oksvg/rasterx
-	data, fmtStr, w, h, err = processImage(svgData, DefaultOptions(WithFormat("png")))
+	data, fmtStr, w, h, err = processImage(svgData, DefaultOptions(WithFormat(TargetPNG)))
 	if err != nil {
 		t.Fatalf("processImage svg to raster error: %v", err)
 	}
-	if fmtStr != "png" {
-		t.Errorf("format = %q, want png", fmtStr)
+	if fmtStr != FormatPNG {
+		t.Errorf("format = %v, want FormatPNG", fmtStr)
 	}
 	if w <= 0 || h <= 0 {
 		t.Errorf("rasterized dims = (%d,%d), want > 0", w, h)
@@ -764,38 +764,38 @@ func TestProcessImage(t *testing.T) {
 	if w != 32 || h != 32 {
 		t.Errorf("resized dims = (%d,%d), want (32,32)", w, h)
 	}
-	if fmtStr != "png" {
-		t.Errorf("format = %q, want png", fmtStr)
+	if fmtStr != FormatPNG {
+		t.Errorf("format = %v, want FormatPNG", fmtStr)
 	}
 
 	// PNG convert to jpg
-	data, fmtStr, w, h, err = processImage(pngData, DefaultOptions(WithFormat("jpg")))
+	data, fmtStr, w, h, err = processImage(pngData, DefaultOptions(WithFormat(TargetJPEG)))
 	if err != nil {
 		t.Fatalf("processImage convert error: %v", err)
 	}
-	if fmtStr != "jpg" {
-		t.Errorf("format = %q, want jpg", fmtStr)
+	if fmtStr != FormatJPEG {
+		t.Errorf("format = %v, want FormatJPEG", fmtStr)
 	}
 
 	// PNG convert to webp
-	data, fmtStr, w, h, err = processImage(pngData, DefaultOptions(WithFormat("webp")))
+	data, fmtStr, w, h, err = processImage(pngData, DefaultOptions(WithFormat(TargetWebP)))
 	if err != nil {
 		t.Fatalf("processImage webp convert error: %v", err)
 	}
-	if fmtStr != "webp" {
-		t.Errorf("format = %q, want webp", fmtStr)
+	if fmtStr != FormatWebP {
+		t.Errorf("format = %v, want FormatWebP", fmtStr)
 	}
 
 	// PNG resize + convert
-	data, fmtStr, w, h, err = processImage(pngData, DefaultOptions(WithSize(48), WithFormat("jpg")))
+	data, fmtStr, w, h, err = processImage(pngData, DefaultOptions(WithSize(48), WithFormat(TargetJPEG)))
 	if err != nil {
 		t.Fatalf("processImage resize+convert error: %v", err)
 	}
 	if w != 48 || h != 48 {
 		t.Errorf("dims = (%d,%d), want (48,48)", w, h)
 	}
-	if fmtStr != "jpg" {
-		t.Errorf("format = %q, want jpg", fmtStr)
+	if fmtStr != FormatJPEG {
+		t.Errorf("format = %v, want FormatJPEG", fmtStr)
 	}
 
 	// Invalid data — should return original
@@ -832,13 +832,13 @@ func TestDecodeImage(t *testing.T) {
 
 func TestDecodeDimensions(t *testing.T) {
 	pngData := createTestPNG(64, 48)
-	w, h := decodeDimensions(pngData, "png")
+	w, h := decodeDimensions(pngData)
 	if w != 64 || h != 48 {
 		t.Errorf("dims = (%d,%d), want (64,48)", w, h)
 	}
 
 	// Empty data
-	w, h = decodeDimensions([]byte{}, "png")
+	w, h = decodeDimensions([]byte{})
 	if w != 0 || h != 0 {
 		t.Errorf("empty dims = (%d,%d), want (0,0)", w, h)
 	}
@@ -868,11 +868,39 @@ func TestResizeImage(t *testing.T) {
 	}
 }
 
+func TestParseTargetFormat(t *testing.T) {
+	tests := []struct {
+		input string
+		want  TargetFormat
+	}{
+		{"png", TargetPNG},
+		{"jpg", TargetJPEG},
+		{"jpeg", TargetJPEG},
+		{"webp", TargetWebP},
+		{"PNG", TargetPNG},
+		{"JPEG", TargetJPEG},
+	}
+	for _, tt := range tests {
+		got, err := ParseTargetFormat(tt.input)
+		if err != nil {
+			t.Errorf("ParseTargetFormat(%q) error: %v", tt.input, err)
+		}
+		if got != tt.want {
+			t.Errorf("ParseTargetFormat(%q) = %v, want %v", tt.input, got, tt.want)
+		}
+	}
+
+	// Invalid
+	if _, err := ParseTargetFormat("svg"); err == nil {
+		t.Error("expected error for unsupported format svg")
+	}
+}
+
 func TestEncodeImage(t *testing.T) {
 	img := image.NewRGBA(image.Rect(0, 0, 16, 16))
 
 	// JPEG
-	jpgData, err := encodeImage(img, "jpeg")
+	jpgData, err := encodeImage(img, TargetJPEG)
 	if err != nil {
 		t.Fatalf("encode jpeg error: %v", err)
 	}
@@ -881,7 +909,7 @@ func TestEncodeImage(t *testing.T) {
 	}
 
 	// WebP
-	webpData, err := encodeImage(img, "webp")
+	webpData, err := encodeImage(img, TargetWebP)
 	if err != nil {
 		t.Fatalf("encode webp error: %v", err)
 	}
@@ -890,7 +918,7 @@ func TestEncodeImage(t *testing.T) {
 	}
 
 	// PNG
-	pngData, err := encodeImage(img, "png")
+	pngData, err := encodeImage(img, TargetPNG)
 	if err != nil {
 		t.Fatalf("encode png error: %v", err)
 	}
@@ -898,22 +926,13 @@ func TestEncodeImage(t *testing.T) {
 		t.Error("png data is empty")
 	}
 
-	// ico — should fallback to PNG
-	icoData, err := encodeImage(img, "ico")
+	// TargetUnspecified — should default to PNG
+	defaultData, err := encodeImage(img, TargetUnspecified)
 	if err != nil {
-		t.Fatalf("encode ico error: %v", err)
+		t.Fatalf("encode default error: %v", err)
 	}
-	if len(icoData) == 0 {
-		t.Error("ico data is empty")
-	}
-}
-
-func TestNormalizeFormat(t *testing.T) {
-	if normalizeFormat("jpeg") != "jpg" {
-		t.Error("jpeg should normalize to jpg")
-	}
-	if normalizeFormat("png") != "png" {
-		t.Error("png should stay png")
+	if len(defaultData) == 0 {
+		t.Error("default data is empty")
 	}
 }
 
@@ -940,8 +959,8 @@ func TestFetchSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Fetch error: %v", err)
 	}
-	if result.Format != "png" {
-		t.Errorf("format = %q, want png", result.Format)
+	if result.Format != FormatPNG {
+		t.Errorf("format = %v, want FormatPNG", result.Format)
 	}
 	if result.Source != sourceLinkTag {
 		t.Errorf("source = %q, want %q", result.Source, sourceLinkTag)
@@ -963,7 +982,7 @@ func TestFetchWithSize(t *testing.T) {
 	}))
 	defer server.Close()
 
-	result, err := Fetch(context.Background(), server.URL, WithBlockPrivateIPs(false), WithSize(32), WithFormat("png"))
+	result, err := Fetch(context.Background(), server.URL, WithBlockPrivateIPs(false), WithSize(32), WithFormat(TargetPNG))
 	if err != nil {
 		t.Fatalf("Fetch error: %v", err)
 	}
