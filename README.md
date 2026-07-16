@@ -164,6 +164,7 @@ type DiscoveredSource struct {
 | `WithSize(px)` | `0` | Resize to px×px (0 = no resize) |
 | `WithFormat(f)` | `TargetUnspecified` | Convert to `TargetPNG`, `TargetJPEG`, or `TargetWebP` |
 | `WithHTTPClient(c)` | `http.DefaultClient` | Custom HTTP client |
+| `WithPreferredFormats(f...)` | (default order) | Set preferred favicon formats in priority order |
 
 ## Favicon Sources & Scoring
 
@@ -175,6 +176,30 @@ The library searches these sources in priority order:
 4. **Google API** — `google.com/s2/favicons` (score 1, optional)
 
 Scoring weights SVG (+100), large sizes (+90 for ≥512px), PNG (+20), WebP (+15), and apple-touch-icon (+10). Mask icons are penalized (−10).
+
+You can customize format priorities with `WithPreferredFormats` (see below).
+
+## Format Preferences
+
+The `WithPreferredFormats` option lets you control which favicon formats are preferred:
+
+```go
+// Prefer SVG, fall back to PNG, then ICO
+result, err := favifetch.Fetch(ctx, "example.com",
+    favifetch.WithPreferredFormats(favifetch.FormatSVG, favifetch.FormatPNG, favifetch.FormatICO),
+)
+```
+
+When preferences are set, sources matching a higher-ranked format get a large score bonus, ensuring they are tried first. Unlisted formats are still tried as a last resort if no preferred format succeeds. Within the same format tier, larger sizes and better sources still win.
+
+```go
+// Prefer PNG only — skip SVG entirely unless nothing else works
+result, err := favifetch.Fetch(ctx, "example.com",
+    favifetch.WithPreferredFormats(favifetch.FormatPNG),
+)
+```
+
+When no preferences are set (or `nil`), the default order is: SVG > PNG > WebP > JPEG > ICO > GIF > BMP.
 
 ## Error Types
 

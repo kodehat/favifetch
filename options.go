@@ -36,6 +36,14 @@ type Options struct {
 	// HTTPClient is the *http.Client to use for all requests. If nil, a default
 	// client is created from the other options.
 	HTTPClient *http.Client
+
+	// PreferredFormats is an ordered list of preferred favicon formats.
+	// The first format is most preferred, the last is least.
+	// During discovery, sources matching a higher-preference format get a
+	// large score bonus, so they are tried before lower-preference formats.
+	// Unlisted formats are still tried as a last resort.
+	// When nil or empty, the default preference order (SVG > PNG > WebP > JPEG > ICO > GIF > BMP) is used.
+	PreferredFormats []DetectedFormat
 }
 
 // DefaultOptions returns the default configuration.
@@ -103,6 +111,15 @@ func WithFormat(format TargetFormat) Option {
 // WithHTTPClient sets a custom http.Client.
 func WithHTTPClient(client *http.Client) Option {
 	return func(o *Options) { o.HTTPClient = client }
+}
+
+// WithPreferredFormats sets the preferred favicon formats in priority order.
+// Example: WithPreferredFormats(FormatSVG, FormatPNG) prefers SVG favicons
+// and falls back to PNG if no SVG is found.
+func WithPreferredFormats(formats ...DetectedFormat) Option {
+	return func(o *Options) {
+		o.PreferredFormats = formats
+	}
 }
 
 // httpClient returns an *http.Client based on the options.

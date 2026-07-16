@@ -76,12 +76,12 @@ func discoverFavicons(ctx context.Context, targetURL string, opts *Options) ([]f
 	favicons = append(favicons, faviconSource{
 		URL:    finalBaseURL + "/favicon.ico",
 		Source: sourceFallback,
-		Score:  10,
+		Score:  10 + formatPreferenceBonus("ico", opts.PreferredFormats),
 	})
 	favicons = append(favicons, faviconSource{
 		URL:    finalBaseURL + "/apple-touch-icon.png",
 		Source: sourceFallback,
-		Score:  20,
+		Score:  20 + formatPreferenceBonus("png", opts.PreferredFormats),
 	})
 
 	// Add Google's favicon API as last-resort fallback (if enabled)
@@ -136,7 +136,7 @@ func fetchAndParseHTML(ctx context.Context, client *http.Client, targetURL, base
 		return nil, newBaseURL, err
 	}
 
-	sources := extractFaviconsFromHTML(doc, newBaseURL, baseURL)
+	sources := extractFaviconsFromHTML(doc, newBaseURL, baseURL, opts.PreferredFormats)
 	return sources, newBaseURL, nil
 }
 
@@ -169,7 +169,7 @@ func doFetchHTML(ctx context.Context, client *http.Client, urlStr, userAgent str
 }
 
 // extractFaviconsFromHTML parses an HTML document and extracts favicon URLs from <link> tags.
-func extractFaviconsFromHTML(doc *html.Node, finalBaseURL, fallbackBaseURL string) []faviconSource {
+func extractFaviconsFromHTML(doc *html.Node, finalBaseURL, fallbackBaseURL string, prefs []DetectedFormat) []faviconSource {
 	base := finalBaseURL
 	if base == "" {
 		base = fallbackBaseURL
@@ -220,7 +220,7 @@ func extractFaviconsFromHTML(doc *html.Node, finalBaseURL, fallbackBaseURL strin
 			}
 
 			size := parseSize(sizes)
-			score := calculateScore(size, format, rel)
+			score := calculateScore(size, format, rel, prefs)
 
 			sources = append(sources, faviconSource{
 				URL:    resolveURL(href, base),
@@ -298,7 +298,7 @@ func fetchManifest(ctx context.Context, client *http.Client, baseURL string, opt
 			Size:   parseSize(icon.Sizes),
 			Format: icon.Type,
 			Source: sourceManifest,
-			Score:  40,
+			Score:  40 + formatPreferenceBonus(icon.Type, opts.PreferredFormats),
 		})
 	}
 	return sources, nil

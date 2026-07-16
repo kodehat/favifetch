@@ -1,8 +1,7 @@
 //go:build ignore
-
 // +build ignore
 
-// Example: fetch GitHub's favicon in multiple formats and sizes.
+// Example: fetch favicons in multiple formats, sizes, and format preferences.
 //
 //	go run example.go
 
@@ -21,7 +20,7 @@ import (
 
 func main() {
 	ctx := context.Background()
-	domain := "github.com"
+	domain := "rust-lang.org"
 
 	// Temporary output directory (relative to this source file).
 	_, thisFile, _, _ := runtime.Caller(0)
@@ -103,6 +102,32 @@ func main() {
 	}
 	for _, s := range sources {
 		fmt.Printf("  [%s] score=%d size=%d %s\n", s.Source, s.Score, s.Size, s.URL)
+	}
+
+	// 7. Format preference — prefer PNG, fall back to SVG.
+	fmt.Println("\n=== 7. Format preference: PNG first, then SVG ===")
+	pref, err := favifetch.Fetch(ctx, domain,
+		favifetch.WithPreferredFormats(favifetch.FormatPNG, favifetch.FormatSVG),
+	)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+	save(pref, tmpDir, fmt.Sprintf("prefer-png.%s", pref.Format))
+	printResult(pref)
+
+	// 8. Discovery with format preferences — scores reflect the preference order.
+	fmt.Println("=== 8. Discovery with format preferences ===")
+	sourcesPref, err := favifetch.Discover(ctx, domain,
+		favifetch.WithTimeout(10*time.Second),
+		favifetch.WithPreferredFormats(favifetch.FormatPNG, favifetch.FormatICO, favifetch.FormatSVG),
+	)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Discovery error: %v\n", err)
+		os.Exit(1)
+	}
+	for _, s := range sourcesPref {
+		fmt.Printf("  [%s] score=%d size=%d f=%s %s\n", s.Source, s.Score, s.Size, s.Format, s.URL)
 	}
 
 	fmt.Println("\nDone! Check", tmpDir)

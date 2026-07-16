@@ -36,18 +36,35 @@ func sortByScore(sources []faviconSource) {
 }
 
 // calculateScore computes a quality score for a favicon.
-func calculateScore(size int, format, rel string) int {
+func calculateScore(size int, format, rel string, prefs []DetectedFormat) int {
 	score := 50
 
 	format = strings.ToLower(format)
 	rel = strings.ToLower(rel)
 
-	// Prefer SVG (vector, scales perfectly)
-	if strings.Contains(format, "svg") {
-		score += 100
+	if len(prefs) > 0 {
+		// User-specified format preferences: apply tiered bonus.
+		score += formatPreferenceBonus(format, prefs)
+	} else {
+		// Default legacy format bonuses.
+		if strings.Contains(format, "svg") {
+			score += 100
+		}
+		switch {
+		case strings.Contains(format, "png"):
+			score += 20
+		case strings.Contains(format, "webp"):
+			score += 15
+		case strings.Contains(format, "gif"):
+			score += 10
+		case strings.Contains(format, "ico"):
+			score += 5
+		case strings.Contains(format, "icon"): // x-icon etc
+			score += 5
+		}
 	}
 
-	// Size preference (larger is better)
+	// Size preference (larger is better) — applies regardless of preference mode.
 	switch {
 	case size >= 512:
 		score += 90
@@ -63,21 +80,7 @@ func calculateScore(size int, format, rel string) int {
 		score += 40
 	}
 
-	// Format preference
-	switch {
-	case strings.Contains(format, "png"):
-		score += 20
-	case strings.Contains(format, "webp"):
-		score += 15
-	case strings.Contains(format, "gif"):
-		score += 10
-	case strings.Contains(format, "ico"):
-		score += 5
-	case strings.Contains(format, "icon"): // x-icon etc
-		score += 5
-	}
-
-	// Rel attribute preference
+	// Rel attribute preference — applies regardless of preference mode.
 	if strings.Contains(rel, "apple-touch-icon") {
 		score += 10
 	}
@@ -86,6 +89,23 @@ func calculateScore(size int, format, rel string) int {
 	}
 
 	return score
+}
+
+// formatPreferenceBonus returns a score bonus based on where the format hint
+// falls in the user's preference list. Higher-ranked formats get larger bonuses.
+func formatPreferenceBonus(formatHint string, prefs []DetectedFormat) int {
+	detected := detectFormatFromHint(formatHint)
+	if detected == FormatUnknown {
+		return 0
+	}
+	for i, pref := range prefs {
+		if pref == detected {
+			// Tier 0 = 1000, tier 1 = 800, tier 2 = 600, etc.
+			return 1000 - i*200
+		}
+	}
+	// Not in preference list — still valid, but gets no bonus.
+	return 0
 }
 
 // resolveURL resolves a potentially relative URL against a base URL.

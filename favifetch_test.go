@@ -226,22 +226,22 @@ func TestSortByScore(t *testing.T) {
 
 func TestCalculateScoreExtended(t *testing.T) {
 	// mask-icon should be penalized
-	s1 := calculateScore(64, "image/png", "icon")
-	s2 := calculateScore(64, "image/png", "mask-icon")
+	s1 := calculateScore(64, "image/png", "icon", nil)
+	s2 := calculateScore(64, "image/png", "mask-icon", nil)
 	if s2 >= s1 {
 		t.Errorf("mask-icon score (%d) should be lower than icon (%d)", s2, s1)
 	}
 
 	// webp format bonus
-	webpScore := calculateScore(128, "image/webp", "icon")
+	webpScore := calculateScore(128, "image/webp", "icon", nil)
 	// should be higher than ico
-	icoScore := calculateScore(128, "image/x-icon", "icon")
+	icoScore := calculateScore(128, "image/x-icon", "icon", nil)
 	if webpScore <= icoScore {
 		t.Errorf("webp score (%d) should be higher than ico (%d)", webpScore, icoScore)
 	}
 
 	// gif format bonus
-	gifScore := calculateScore(128, "image/gif", "icon")
+	gifScore := calculateScore(128, "image/gif", "icon", nil)
 	if gifScore <= icoScore {
 		t.Errorf("gif score (%d) should be higher than ico (%d)", gifScore, icoScore)
 	}
@@ -249,7 +249,7 @@ func TestCalculateScoreExtended(t *testing.T) {
 	// size bonuses: 512, 256, 192, 128, 64, 32
 	sizeScores := map[int]int{}
 	for _, sz := range []int{512, 256, 192, 128, 64, 32} {
-		sizeScores[sz] = calculateScore(sz, "image/x-icon", "icon")
+		sizeScores[sz] = calculateScore(sz, "image/x-icon", "icon", nil)
 	}
 	if sizeScores[512] <= sizeScores[256] {
 		t.Error("512 should score higher than 256")
@@ -1056,15 +1056,15 @@ func TestFetchDomainMapping(t *testing.T) {
 
 func TestCalculateScoreEdgeCases(t *testing.T) {
 	// Score for size >= 192
-	s192 := calculateScore(192, "image/x-icon", "icon")
-	s128 := calculateScore(128, "image/x-icon", "icon")
+	s192 := calculateScore(192, "image/x-icon", "icon", nil)
+	s128 := calculateScore(128, "image/x-icon", "icon", nil)
 	if s192 <= s128 {
 		t.Error("192 should score higher than 128")
 	}
 
 	// png bonus vs no png bonus
-	pngScore := calculateScore(64, "image/png", "icon")
-	plainScore := calculateScore(64, "", "icon")
+	pngScore := calculateScore(64, "image/png", "icon", nil)
+	plainScore := calculateScore(64, "", "icon", nil)
 	if pngScore <= plainScore {
 		t.Error("png format should add bonus")
 	}
@@ -1093,5 +1093,169 @@ func TestFetchURLWithPath(t *testing.T) {
 	}
 	if result == nil {
 		t.Fatal("result is nil")
+	}
+}
+
+// --- Format preference tests ---
+
+func TestWithPreferredFormats(t *testing.T) {
+	o := DefaultOptions(WithPreferredFormats(FormatSVG, FormatPNG))
+	if len(o.PreferredFormats) != 2 {
+		t.Fatalf("expected 2 preferred formats, got %d", len(o.PreferredFormats))
+	}
+	if o.PreferredFormats[0] != FormatSVG || o.PreferredFormats[1] != FormatPNG {
+		t.Error("preferred formats not set correctly")
+	}
+}
+
+func TestFormatPreferenceBonus(t *testing.T) {
+	prefs := []DetectedFormat{FormatSVG, FormatPNG, FormatICO}
+
+	// First preference gets highest bonus
+	svgBonus := formatPreferenceBonus("image/svg+xml", prefs)
+	pngBonus := formatPreferenceBonus("image/png", prefs)
+	icoBonus := formatPreferenceBonus("ico", prefs)
+
+	if svgBonus <= pngBonus {
+		t.Errorf("SVG bonus (%d) should be higher than PNG bonus (%d)", svgBonus, pngBonus)
+	}
+	if pngBonus <= icoBonus {
+		t.Errorf("PNG bonus (%d) should be higher than ICO bonus (%d)", pngBonus, icoBonus)
+	}
+	if svgBonus != 1000 {
+		t.Errorf("first preference bonus = %d, want 1000", svgBonus)
+	}
+	if pngBonus != 800 {
+		t.Errorf("second preference bonus = %d, want 800", pngBonus)
+	}
+
+	// Unlisted format gets no bonus
+	gifBonus := formatPreferenceBonus("image/gif", prefs)
+	if gifBonus != 0 {
+		t.Errorf("unlisted format bonus = %d, want 0", gifBonus)
+	}
+
+	// Unknown format hint gets no bonus
+	unknownBonus := formatPreferenceBonus("", prefs)
+	if unknownBonus != 0 {
+		t.Errorf("unknown format bonus = %d, want 0", unknownBonus)
+	}
+
+	// Empty/nil preferences return 0
+	noBonus := formatPreferenceBonus("svg", nil)
+	if noBonus != 0 {
+		t.Errorf("nil prefs bonus = %d, want 0", noBonus)
+	}
+}
+
+func TestCalculateScoreWithPreferences(t *testing.T) {
+	prefs := []DetectedFormat{FormatSVG, FormatPNG}
+
+	// A small SVG should outrank a large PNG when SVG is preferred
+	smallSVG := calculateScore(16, "image/svg+xml", "icon", prefs)
+	largePNG := calculateScore(512, "image/png", "apple-touch-icon", prefs)
+
+	if smallSVG <= largePNG {
+		t.Errorf("small SVG score (%d) should be higher than large PNG score (%d) when SVG preferred",
+			smallSVG, largePNG)
+	}
+
+	// Within same preferred format, size still matters
+	smallPNG := calculateScore(32, "image/png", "icon", prefs)
+	if smallPNG >= largePNG {
+		t.Errorf("small PNG score (%d) should be lower than large PNG score (%d)", smallPNG, largePNG)
+	}
+
+	// Unlisted format (ICO) gets no bonus
+	icoScore := calculateScore(512, "image/x-icon", "icon", prefs)
+	if icoScore >= smallPNG {
+		t.Errorf("unlisted ICO score (%d) should be lower than preferred PNG score (%d)", icoScore, smallPNG)
+	}
+
+	// Legacy scoring (nil prefs) still works
+	legacySVG := calculateScore(64, "image/svg+xml", "icon", nil)
+	legacyICO := calculateScore(64, "image/x-icon", "icon", nil)
+	if legacySVG <= legacyICO {
+		t.Error("legacy: SVG should outrank ICO")
+	}
+}
+
+func TestFetchWithFormatPreference(t *testing.T) {
+	svgData := []byte(`<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><rect width="32" height="32" fill="red"/></svg>`)
+	pngData := createTestPNG(32, 32)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/":
+			w.Header().Set("Content-Type", "text/html")
+			// Offer both SVG and PNG; SVG appears first in HTML but we'll test preference ordering
+			w.Write([]byte(`<html><head>
+				<link rel="icon" href="/icon.svg" type="image/svg+xml" sizes="32x32">
+				<link rel="icon" href="/icon.png" type="image/png" sizes="32x32">
+			</head></html>`))
+		case "/icon.svg":
+			w.Header().Set("Content-Type", "image/svg+xml")
+			w.Write(svgData)
+		case "/icon.png":
+			w.Header().Set("Content-Type", "image/png")
+			w.Write(pngData)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	// Default: SVG should win (preference bonus + existing SVG bonus)
+	result, err := Fetch(context.Background(), server.URL, WithBlockPrivateIPs(false), WithFallbackAPI(false))
+	if err != nil {
+		t.Fatalf("Fetch error: %v", err)
+	}
+	if result.Format != FormatSVG {
+		t.Errorf("default: expected SVG, got %s", result.Format)
+	}
+
+	// Explicitly prefer PNG over SVG
+	result, err = Fetch(context.Background(), server.URL,
+		WithBlockPrivateIPs(false), WithFallbackAPI(false),
+		WithPreferredFormats(FormatPNG, FormatSVG),
+	)
+	if err != nil {
+		t.Fatalf("Fetch error: %v", err)
+	}
+	if result.Format != FormatPNG {
+		t.Errorf("PNG-preferred: expected PNG, got %s", result.Format)
+	}
+}
+
+func TestFetchFormatPreferenceFallback(t *testing.T) {
+	// Server only has an ICO file (no SVG or PNG)
+	icoData := make([]byte, 100)
+	icoData[0], icoData[1], icoData[2], icoData[3] = 0x00, 0x00, 0x01, 0x00 // ICO magic
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/":
+			w.Header().Set("Content-Type", "text/html")
+			w.Write([]byte(`<html><head><link rel="icon" href="/favicon.ico"></head></html>`))
+		case "/favicon.ico":
+			w.Header().Set("Content-Type", "image/x-icon")
+			w.Write(icoData)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	// User prefers SVG, then PNG, but only ICO is available — should fall back to ICO
+	result, err := Fetch(context.Background(), server.URL,
+		WithBlockPrivateIPs(false), WithFallbackAPI(false),
+		WithPreferredFormats(FormatSVG, FormatPNG),
+	)
+	if err != nil {
+		t.Fatalf("Fetch error: %v", err)
+	}
+	// Should fall back to ICO since preferred formats aren't available
+	if result.Format != FormatICO {
+		t.Errorf("expected ICO fallback, got %s", result.Format)
 	}
 }
