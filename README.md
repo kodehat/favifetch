@@ -14,6 +14,7 @@ A Go library for discovering and fetching website favicons. Automatically finds 
 - **SSRF Protection** — Blocks requests to private IPs by default
 - **Domain Mappings** — Maps app package names (e.g. `com.pinterest`) to canonical domains
 - **Google API Fallback** — Optionally uses Google's `s2/favicons` as a last-resort source
+- **Browser Mode** — Selects the regular favicon Chromium would use for a 16px desktop tab from the initial HTML
 - **Context Support** — Full `context.Context` integration for cancellation and timeouts
 - **Zero cgo** — Pure Go image processing (no Sharp/Node dependency)
 
@@ -100,6 +101,24 @@ result, err := favifetch.Fetch(ctx, "internal.company.com",
     favifetch.WithBlockPrivateIPs(false),
 )
 ```
+
+### Chromium Browser Mode
+
+Use browser mode when the selected favicon source should follow Chromium-style
+regular tab-icon discovery instead of favifetch's quality ranking:
+
+```go
+result, err := favifetch.Fetch(ctx, "example.com",
+    favifetch.WithMode(favifetch.ModeBrowser),
+)
+```
+
+Browser mode considers only HTML `<link rel="icon">` candidates and falls back
+to `/favicon.ico` only when the page declares none. It honors the final page URL
+and `<base href>`, returns the original downloaded bytes, and cannot be combined
+with `WithSize` or `WithFormat`. It does not execute JavaScript or reproduce a
+browser session's cookies and other runtime state.
+It always uses a Chromium-like User-Agent; `WithUserAgent` is ignored in this mode.
 
 ### Discovery Only
 

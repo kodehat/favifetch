@@ -7,8 +7,13 @@ import (
 
 // Options holds all configuration for the favicon fetcher.
 type Options struct {
+	// Mode controls how favicon candidates are selected. The default ModeBest
+	// ranks all supported favicon sources by quality. ModeBrowser emulates
+	// Chromium's regular tab-icon selection from the initial HTML document.
+	Mode FaviconMode
+
 	// UserAgent sent in HTTP requests for HTML and manifest fetching.
-	// For actual favicon image fetches, both this and a browser-like UA are tried.
+	// ModeBrowser always uses its Chromium-like User-Agent instead.
 	UserAgent string
 
 	// RequestTimeout is the maximum time for the entire fetch operation.
@@ -50,6 +55,7 @@ type Options struct {
 // Optional Option arguments can be passed to override defaults.
 func DefaultOptions(opts ...Option) *Options {
 	o := &Options{
+		Mode:            ModeBest,
 		UserAgent:       "Favifetch/1.0",
 		RequestTimeout:  5 * time.Second,
 		MaxImageSize:    5 * 1024 * 1024, // 5MB
@@ -68,7 +74,25 @@ func DefaultOptions(opts ...Option) *Options {
 // Option is a functional option for configuring the fetcher.
 type Option func(*Options)
 
-// WithUserAgent sets the User-Agent header.
+// FaviconMode controls how favicon candidates are selected.
+type FaviconMode int
+
+const (
+	// ModeBest selects the highest-ranked favicon from all supported sources.
+	ModeBest FaviconMode = iota
+	// ModeBrowser selects a Chromium-style regular tab favicon from the initial
+	// HTML document. It returns the original image bytes and does not support
+	// resizing or format conversion.
+	ModeBrowser
+)
+
+// WithMode sets the favicon selection mode.
+func WithMode(mode FaviconMode) Option {
+	return func(o *Options) { o.Mode = mode }
+}
+
+// WithUserAgent sets the User-Agent header. It is ignored in ModeBrowser,
+// which always uses its Chromium-like User-Agent.
 func WithUserAgent(ua string) Option {
 	return func(o *Options) { o.UserAgent = ua }
 }

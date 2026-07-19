@@ -26,6 +26,7 @@ type faviconSource struct {
 	Format string
 	Source string
 	Score  int
+	order  int
 }
 
 // sortByScore sorts favicon sources by score descending.
@@ -139,6 +140,11 @@ func resolveURL(rawURL, baseURL string) string {
 
 // fetchBestFavicon tries to fetch favicons in score order and returns the first valid one.
 func fetchBestFavicon(ctx context.Context, client *http.Client, sources []faviconSource, opts *Options) *FaviconResult {
+	userAgent := opts.UserAgent
+	if opts.Mode == ModeBrowser {
+		userAgent = browserUserAgent
+	}
+
 	for _, src := range sources {
 		select {
 		case <-ctx.Done():
@@ -153,7 +159,7 @@ func fetchBestFavicon(ctx context.Context, client *http.Client, sources []favico
 		if isDataURL(src.URL) {
 			data, mimeType, err = parseDataURL(src.URL)
 		} else {
-			data, err = fetchImage(ctx, client, src.URL, opts.UserAgent)
+			data, err = fetchImage(ctx, client, src.URL, userAgent)
 			if err == nil && len(data) > 0 {
 				mimeType = detectMimeType(data)
 			}

@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sort"
 	"strings"
 
 	"golang.org/x/net/html"
@@ -23,6 +24,9 @@ func discoverFavicons(ctx context.Context, targetURL string, opts *Options) ([]f
 	baseURL, err := buildBaseURL(targetURL)
 	if err != nil {
 		return nil, err
+	}
+	if opts.Mode == ModeBrowser {
+		return discoverBrowserFavicons(ctx, client, targetURL, baseURL)
 	}
 
 	// These will be populated by fetchHTML if successful
@@ -104,6 +108,43 @@ func discoverFavicons(ctx context.Context, targetURL string, opts *Options) ([]f
 	// Sort by score (highest first)
 	sortByScore(favicons)
 	return favicons, nil
+}
+
+// discoverBrowserFavicons finds the regular tab-icon candidates Chromium would
+// consider from the initial HTML document. It intentionally excludes manifest,
+// Apple touch, mask, and third-party fallback icons.
+func discoverBrowserFavicons(ctx context.Context, client *http.Client, targetURL, fallbackBaseURL string) ([]faviconSource, error) {
+	htmlBody, finalURL, err := doFetchHTML(ctx, client, targetURL, browserUserAgent)
+	if err != nil {
+		return nil, err
+	}
+
+	doc, err := html.Parse(strings.NewReader(htmlBody))
+	if err != nil {
+		return nil, err
+	}
+
+	sources := extractBrowserFaviconsFromHTML(doc, finalURL)
+	if len(sources) == 0 {
+		baseURL := fallbackBaseURL
+		if parsed, err := url.Parse(finalURL); err == nil && parsed.Scheme != "" && parsed.Host != "" {
+			baseURL = parsed.Scheme + "://" + parsed.Host
+		}
+		sources = append(sources, faviconSource{
+			URL:    baseURL + "/favicon.ico",
+			Format: "ico",
+			Source: sourceFallback,
+			Score:  0,
+		})
+	}
+
+	sort.SliceStable(sources, func(i, j int) bool {
+		if sources[i].Score == sources[j].Score {
+			return sources[i].order > sources[j].order
+		}
+		return sources[i].Score > sources[j].Score
+	})
+	return sources, nil
 }
 
 // fetchAndParseHTML fetches the HTML of a page and extracts favicon links.
@@ -238,6 +279,169 @@ func extractFaviconsFromHTML(doc *html.Node, finalBaseURL, fallbackBaseURL strin
 	walk(doc)
 
 	return sources
+}
+
+// extractBrowserFaviconsFromHTML returns only regular rel=icon candidates in
+// Chromium-like preference order for a 16px, 1x tab icon.
+func extractBrowserFaviconsFromHTML(doc *html.Node, documentURL string) []faviconSource {
+	baseURL := browserDocumentBaseURL(doc, documentURL)
+	var sources []faviconSource
+	order := 0
+
+	var walk func(*html.Node)
+	walk = func(n *html.Node) {
+		if n.Type == html.ElementNode && n.Data == "link" {
+			var rel, href, sizes, typeAttr string
+			for _, attr := range n.Attr {
+				switch strings.ToLower(attr.Key) {
+				case "rel":
+					rel = attr.Val
+				case "href":
+					href = attr.Val
+				case "sizes":
+					sizes = attr.Val
+				case "type":
+					typeAttr = attr.Val
+				}
+			}
+			if href != "" && hasRelToken(rel, "icon") {
+				format := typeAttr
+				if format == "" {
+					format = detectFormatHintFromURL(href)
+				}
+				sources = append(sources, faviconSource{
+					URL:    resolveBrowserURL(href, baseURL),
+					Size:   parseSize(sizes),
+					Format: format,
+					Source: sourceLinkTag,
+					Score:  browserCandidateScore(sizes, format),
+					order:  order,
+				})
+				order++
+			}
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			walk(c)
+		}
+	}
+	walk(doc)
+	sort.SliceStable(sources, func(i, j int) bool {
+		if sources[i].Score == sources[j].Score {
+			return sources[i].order > sources[j].order
+		}
+		return sources[i].Score > sources[j].Score
+	})
+	return sources
+}
+
+func hasRelToken(rel, token string) bool {
+	for _, part := range strings.Fields(strings.ToLower(rel)) {
+		if part == token {
+			return true
+		}
+	}
+	return false
+}
+
+func browserDocumentBaseURL(doc *html.Node, documentURL string) string {
+	baseURL := documentURL
+	var found bool
+	var walk func(*html.Node)
+	walk = func(n *html.Node) {
+		if found {
+			return
+		}
+		if n.Type == html.ElementNode && n.Data == "base" {
+			for _, attr := range n.Attr {
+				if strings.EqualFold(attr.Key, "href") && attr.Val != "" {
+					if resolved := resolveBrowserURL(attr.Val, documentURL); isHTTPURL(resolved) {
+						baseURL, found = resolved, true
+					}
+					break
+				}
+			}
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			walk(c)
+		}
+	}
+	walk(doc)
+	return baseURL
+}
+
+func resolveBrowserURL(rawURL, baseURL string) string {
+	if isDataURL(rawURL) {
+		return rawURL
+	}
+	base, err := url.Parse(baseURL)
+	if err != nil {
+		return rawURL
+	}
+	ref, err := url.Parse(rawURL)
+	if err != nil {
+		return rawURL
+	}
+	return base.ResolveReference(ref).String()
+}
+
+func isHTTPURL(rawURL string) bool {
+	parsed, err := url.Parse(rawURL)
+	return err == nil && (parsed.Scheme == "http" || parsed.Scheme == "https") && parsed.Host != ""
+}
+
+func detectFormatHintFromURL(rawURL string) string {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return ""
+	}
+	if lastDot := strings.LastIndex(parsed.Path, "."); lastDot >= 0 {
+		return parsed.Path[lastDot+1:]
+	}
+	return ""
+}
+
+// browserCandidateScore orders declared candidates for Chromium's normal 16px,
+// 1x desktop tab target. Larger values are preferred.
+func browserCandidateScore(sizes, format string) int {
+	if hasSizeToken(sizes, "any") || detectFormatFromHint(format) == FormatSVG {
+		return 400000
+	}
+
+	bestLarger := 0
+	bestSmaller := 0
+	for _, size := range strings.Fields(strings.ToLower(sizes)) {
+		var w, h int
+		if n, err := fmt.Sscanf(size, "%dx%d", &w, &h); n != 2 || err != nil || w <= 0 || h <= 0 {
+			continue
+		}
+		if w == 16 && h == 16 {
+			return 400000
+		}
+		dimension := max(w, h)
+		if w >= 16 && h >= 16 {
+			if bestLarger == 0 || dimension < bestLarger {
+				bestLarger = dimension
+			}
+		} else if dimension > bestSmaller {
+			bestSmaller = dimension
+		}
+	}
+	if bestLarger > 0 {
+		return 300000 - bestLarger
+	}
+	if bestSmaller > 0 {
+		return 200000 + bestSmaller
+	}
+	return 100000
+}
+
+func hasSizeToken(sizes, token string) bool {
+	for _, size := range strings.Fields(strings.ToLower(sizes)) {
+		if size == token {
+			return true
+		}
+	}
+	return false
 }
 
 // isFaviconRel checks if a rel attribute indicates a favicon link.

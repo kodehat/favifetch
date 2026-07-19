@@ -8,8 +8,11 @@ import (
 	"image/png"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
+
+	"golang.org/x/net/html"
 )
 
 // --- Existing tests kept below ---
@@ -40,6 +43,23 @@ func TestOptionFuncs(t *testing.T) {
 	}
 	if o.HTTPClient == nil {
 		t.Error("HTTPClient should not be nil")
+	}
+}
+
+func TestWithMode(t *testing.T) {
+	o := DefaultOptions(WithMode(ModeBrowser))
+	if o.Mode != ModeBrowser {
+		t.Fatalf("Mode = %v, want ModeBrowser", o.Mode)
+	}
+	if DefaultOptions().Mode != ModeBest {
+		t.Fatal("default mode should be ModeBest")
+	}
+}
+
+func TestFetchBrowserModeRejectsTransforms(t *testing.T) {
+	_, err := Fetch(context.Background(), "example.com", WithMode(ModeBrowser), WithSize(16))
+	if err == nil || !strings.Contains(err.Error(), "cannot be used with WithSize or WithFormat") {
+		t.Fatalf("Fetch browser mode with resize error = %v, want configuration error", err)
 	}
 }
 
@@ -258,6 +278,7 @@ func TestCalculateScoreExtended(t *testing.T) {
 		t.Error("256 should score higher than 192")
 	}
 }
+
 // --- detectFormat extended ---
 
 func TestDetectFormatExtended(t *testing.T) {
@@ -407,7 +428,7 @@ func TestDiscoverFavicons(t *testing.T) {
 	}))
 	defer server.Close()
 
-	opts := DefaultOptions(WithBlockPrivateIPs(false), WithTimeout(5 * time.Second))
+	opts := DefaultOptions(WithBlockPrivateIPs(false), WithTimeout(5*time.Second))
 	opts.HTTPClient = server.Client()
 
 	sources, err := discoverFavicons(context.Background(), server.URL, opts)
@@ -470,7 +491,7 @@ func TestExtractFaviconsFromHTML(t *testing.T) {
 	defer server.Close()
 
 	client := server.Client()
-	opts := DefaultOptions(WithBlockPrivateIPs(false), WithTimeout(5 * time.Second))
+	opts := DefaultOptions(WithBlockPrivateIPs(false), WithTimeout(5*time.Second))
 
 	body, finalURL, err := doFetchHTML(context.Background(), client, server.URL, opts.UserAgent)
 	if err != nil {
@@ -502,6 +523,46 @@ func TestExtractFaviconsFromHTML(t *testing.T) {
 	// Should have found 3 favicon links (icon, apple-touch-icon, mask-icon) + no stylesheet
 	if len(sources) < 3 {
 		t.Errorf("expected at least 3 favicon sources, got %d", len(sources))
+	}
+}
+
+func TestExtractBrowserFaviconsFromHTML(t *testing.T) {
+	doc, err := html.Parse(strings.NewReader(`<!doctype html><head>
+		<base href="https://cdn.example/assets/">
+		<link rel="apple-touch-icon" href="apple.png" sizes="180x180">
+		<link rel="mask-icon" href="mask.svg">
+		<link rel="icon" href="small.png" sizes="8x8">
+		<link rel="shortcut icon" href="exact.png" sizes="16x16">
+		<link rel="icon" href="later.png" sizes="16x16">
+	</head>`))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sources := extractBrowserFaviconsFromHTML(doc, "https://example.com/path/page")
+	if len(sources) != 3 {
+		t.Fatalf("got %d browser sources, want 3", len(sources))
+	}
+	if sources[0].URL != "https://cdn.example/assets/later.png" {
+		t.Errorf("first source = %q, want later exact icon", sources[0].URL)
+	}
+	if sources[1].URL != "https://cdn.example/assets/exact.png" {
+		t.Errorf("second source = %q, want earlier exact icon", sources[1].URL)
+	}
+	if sources[2].URL != "https://cdn.example/assets/small.png" {
+		t.Errorf("third source = %q, want smaller icon", sources[2].URL)
+	}
+}
+
+func TestBrowserCandidateScore(t *testing.T) {
+	if browserCandidateScore("16x16", "image/png") <= browserCandidateScore("32x32", "image/png") {
+		t.Error("exact 16px candidate should outrank larger candidate")
+	}
+	if browserCandidateScore("32x32", "image/png") <= browserCandidateScore("8x8", "image/png") {
+		t.Error("larger candidate should outrank smaller candidate")
+	}
+	if browserCandidateScore("any", "image/png") != browserCandidateScore("", "image/svg+xml") {
+		t.Error("scalable candidates should share the highest score")
 	}
 }
 

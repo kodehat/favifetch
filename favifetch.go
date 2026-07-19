@@ -55,6 +55,9 @@ func Fetch(ctx context.Context, rawURL string, opts ...Option) (*FaviconResult, 
 	for _, opt := range opts {
 		opt(options)
 	}
+	if options.Mode == ModeBrowser && (options.Size > 0 || options.Format != TargetUnspecified) {
+		return nil, fmt.Errorf("favifetch: browser mode returns original favicon bytes and cannot be used with WithSize or WithFormat")
+	}
 
 	// Apply domain mappings
 	rawURL = resolveDomainMapping(rawURL)

@@ -20,7 +20,7 @@ import (
 
 func main() {
 	ctx := context.Background()
-	domain := "rust-lang.org"
+	domain := "gmail.com"
 
 	// Temporary output directory (relative to this source file).
 	_, thisFile, _, _ := runtime.Caller(0)
@@ -129,6 +129,20 @@ func main() {
 	for _, s := range sourcesPref {
 		fmt.Printf("  [%s] score=%d size=%d f=%s %s\n", s.Source, s.Score, s.Size, s.Format, s.URL)
 	}
+
+	// 9. Browser mode — use the regular favicon Chromium would select for a tab.
+	// Browser mode keeps the original bytes, so it cannot be combined with
+	// WithSize or WithFormat.
+	fmt.Println("=== 9. Browser mode: Chromium-style tab favicon ===")
+	browser, err := favifetch.Fetch(ctx, domain,
+		favifetch.WithMode(favifetch.ModeBrowser),
+	)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+	save(browser, tmpDir, fmt.Sprintf("browser.%s", browser.Format))
+	printResult(browser)
 
 	fmt.Println("\nDone! Check", tmpDir)
 }
