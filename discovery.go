@@ -26,7 +26,7 @@ func discoverFavicons(ctx context.Context, targetURL string, opts *Options) ([]f
 		return nil, err
 	}
 	if opts.Mode == ModeBrowser {
-		return discoverBrowserFavicons(ctx, client, targetURL, baseURL)
+		return discoverBrowserFavicons(ctx, client, targetURL, baseURL, opts)
 	}
 
 	// These will be populated by fetchHTML if successful
@@ -88,21 +88,9 @@ func discoverFavicons(ctx context.Context, targetURL string, opts *Options) ([]f
 		Score:  20 + formatPreferenceBonus("png", opts.PreferredFormats),
 	})
 
-	// Add Google's favicon API as last-resort fallback (if enabled)
+	// Add Vemetric's favicon API as a last-resort fallback (if enabled).
 	if opts.UseFallbackAPI {
-		size := opts.Size
-		if size == 0 {
-			size = 64
-		}
-		host := strings.TrimPrefix(strings.TrimPrefix(targetURL, "https://"), "http://")
-		host = strings.SplitN(host, "/", 2)[0]
-		googleURL := fmt.Sprintf("https://www.google.com/s2/favicons?domain=%s&sz=%d",
-			url.QueryEscape("https://"+host), size)
-		favicons = append(favicons, faviconSource{
-			URL:    googleURL,
-			Source: sourceFallbackAPI,
-			Score:  1,
-		})
+		favicons = append(favicons, vemetricFallbackSource(targetURL, opts))
 	}
 
 	// Sort by score (highest first)
@@ -111,16 +99,22 @@ func discoverFavicons(ctx context.Context, targetURL string, opts *Options) ([]f
 }
 
 // discoverBrowserFavicons finds the regular tab-icon candidates Chromium would
-// consider from the initial HTML document. It intentionally excludes manifest,
-// Apple touch, mask, and third-party fallback icons.
-func discoverBrowserFavicons(ctx context.Context, client *http.Client, targetURL, fallbackBaseURL string) ([]faviconSource, error) {
+// consider from the initial HTML document. It excludes manifest, Apple touch,
+// and mask icons. When enabled, the Vemetric API is a last-resort fallback.
+func discoverBrowserFavicons(ctx context.Context, client *http.Client, targetURL, fallbackBaseURL string, opts *Options) ([]faviconSource, error) {
 	htmlBody, finalURL, err := doFetchHTML(ctx, client, targetURL, browserUserAgent)
 	if err != nil {
+		if opts.UseFallbackAPI {
+			return []faviconSource{browserVemetricFallbackSource(targetURL, opts)}, nil
+		}
 		return nil, err
 	}
 
 	doc, err := html.Parse(strings.NewReader(htmlBody))
 	if err != nil {
+		if opts.UseFallbackAPI {
+			return []faviconSource{browserVemetricFallbackSource(targetURL, opts)}, nil
+		}
 		return nil, err
 	}
 
@@ -137,6 +131,9 @@ func discoverBrowserFavicons(ctx context.Context, client *http.Client, targetURL
 			Score:  0,
 		})
 	}
+	if opts.UseFallbackAPI {
+		sources = append(sources, browserVemetricFallbackSource(targetURL, opts))
+	}
 
 	sort.SliceStable(sources, func(i, j int) bool {
 		if sources[i].Score == sources[j].Score {
@@ -145,6 +142,29 @@ func discoverBrowserFavicons(ctx context.Context, client *http.Client, targetURL
 		return sources[i].Score > sources[j].Score
 	})
 	return sources, nil
+}
+
+func vemetricFallbackSource(targetURL string, opts *Options) faviconSource {
+	size := opts.Size
+	if size == 0 {
+		size = 64
+	}
+	parsedTarget, _ := url.Parse(targetURL) // targetURL was validated before discovery.
+	apiHost := opts.VemetricAPIHost
+	if apiHost == "" {
+		apiHost = defaultVemetricAPIHost
+	}
+	return faviconSource{
+		URL:    fmt.Sprintf("https://%s/%s?size=%d", apiHost, url.PathEscape(parsedTarget.Hostname()), size),
+		Source: sourceFallbackAPI,
+		Score:  1,
+	}
+}
+
+func browserVemetricFallbackSource(targetURL string, opts *Options) faviconSource {
+	source := vemetricFallbackSource(targetURL, opts)
+	source.Score = -1 // Browser-discovered candidates and /favicon.ico take precedence.
+	return source
 }
 
 // fetchAndParseHTML fetches the HTML of a page and extracts favicon links.

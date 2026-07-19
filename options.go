@@ -5,6 +5,8 @@ import (
 	"time"
 )
 
+const defaultVemetricAPIHost = "favicon.vemetric.com"
+
 // Options holds all configuration for the favicon fetcher.
 type Options struct {
 	// Mode controls how favicon candidates are selected. The default ModeBest
@@ -28,8 +30,12 @@ type Options struct {
 	// BlockPrivateIps controls whether requests to private IP ranges are rejected.
 	BlockPrivateIps bool
 
-	// UseFallbackAPI enables the Google s2/favicons API as a last-resort fallback.
+	// UseFallbackAPI enables the Vemetric favicon API as a last-resort fallback.
 	UseFallbackAPI bool
+
+	// VemetricAPIHost is the host, optionally including a port, of a
+	// Vemetric-compatible favicon API. Requests use HTTPS.
+	VemetricAPIHost string
 
 	// Size is the desired output size in pixels (resizes favicon to size×size).
 	// 0 means no resizing.
@@ -62,6 +68,7 @@ func DefaultOptions(opts ...Option) *Options {
 		MaxRedirects:    5,
 		BlockPrivateIps: true,
 		UseFallbackAPI:  true,
+		VemetricAPIHost: defaultVemetricAPIHost,
 		Size:            0,
 		Format:          TargetUnspecified,
 	}
@@ -81,7 +88,8 @@ const (
 	// ModeBest selects the highest-ranked favicon from all supported sources.
 	ModeBest FaviconMode = iota
 	// ModeBrowser selects a Chromium-style regular tab favicon from the initial
-	// HTML document. It returns the original image bytes and does not support
+	// HTML document. When enabled, the fallback API is used if those candidates
+	// cannot be fetched. It returns the original image bytes and does not support
 	// resizing or format conversion.
 	ModeBrowser
 )
@@ -117,9 +125,15 @@ func WithBlockPrivateIPs(block bool) Option {
 	return func(o *Options) { o.BlockPrivateIps = block }
 }
 
-// WithFallbackAPI enables or disables the Google favicon API fallback.
+// WithFallbackAPI enables or disables the Vemetric favicon API fallback.
 func WithFallbackAPI(use bool) Option {
 	return func(o *Options) { o.UseFallbackAPI = use }
+}
+
+// WithVemetricAPIHost sets the host, optionally including a port, for a
+// self-hosted Vemetric-compatible favicon API. Requests use HTTPS.
+func WithVemetricAPIHost(host string) Option {
+	return func(o *Options) { o.VemetricAPIHost = host }
 }
 
 // WithSize sets the desired output size (resize to size×size pixels).

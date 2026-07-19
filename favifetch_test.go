@@ -8,6 +8,7 @@ import (
 	"image/png"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -27,6 +28,7 @@ func TestOptionFuncs(t *testing.T) {
 		WithMaxRedirects(3),
 		WithBlockPrivateIPs(false),
 		WithFallbackAPI(false),
+		WithVemetricAPIHost("favicons.example.test:8443"),
 		WithHTTPClient(&http.Client{}),
 	)
 	if o.MaxImageSize != 1000 {
@@ -40,6 +42,9 @@ func TestOptionFuncs(t *testing.T) {
 	}
 	if o.UseFallbackAPI {
 		t.Error("UseFallbackAPI should be false")
+	}
+	if o.VemetricAPIHost != "favicons.example.test:8443" {
+		t.Errorf("VemetricAPIHost = %q", o.VemetricAPIHost)
 	}
 	if o.HTTPClient == nil {
 		t.Error("HTTPClient should not be nil")
@@ -60,6 +65,55 @@ func TestFetchBrowserModeRejectsTransforms(t *testing.T) {
 	_, err := Fetch(context.Background(), "example.com", WithMode(ModeBrowser), WithSize(16))
 	if err == nil || !strings.Contains(err.Error(), "cannot be used with WithSize or WithFormat") {
 		t.Fatalf("Fetch browser mode with resize error = %v, want configuration error", err)
+	}
+}
+
+func TestFetchBrowserModeFallsBackToVemetric(t *testing.T) {
+	pngData := createTestPNG(16, 16)
+	var targetHost string
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/":
+			http.Error(w, "blocked", http.StatusForbidden)
+		case "/" + targetHost:
+			w.Header().Set("Content-Type", "image/png")
+			_, _ = w.Write(pngData)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	parsedServer, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatalf("parse test server URL: %v", err)
+	}
+	targetHost = parsedServer.Hostname()
+
+	result, err := Fetch(context.Background(), server.URL,
+		WithMode(ModeBrowser),
+		WithBlockPrivateIPs(false),
+		WithHTTPClient(server.Client()),
+		WithVemetricAPIHost(parsedServer.Host),
+	)
+	if err != nil {
+		t.Fatalf("Fetch browser mode fallback: %v", err)
+	}
+	if result.Source != sourceFallbackAPI {
+		t.Errorf("Source = %q, want %q", result.Source, sourceFallbackAPI)
+	}
+	if got, want := result.SourceURL, server.URL+"/"+targetHost+"?size=64"; got != want {
+		t.Errorf("SourceURL = %q, want %q", got, want)
+	}
+
+	_, err = Fetch(context.Background(), server.URL,
+		WithMode(ModeBrowser),
+		WithBlockPrivateIPs(false),
+		WithHTTPClient(server.Client()),
+		WithFallbackAPI(false),
+	)
+	if err == nil || !strings.Contains(err.Error(), "HTTP 403") {
+		t.Errorf("Fetch browser mode without fallback error = %v, want HTTP 403", err)
 	}
 }
 
@@ -436,15 +490,59 @@ func TestDiscoverFavicons(t *testing.T) {
 		t.Fatalf("discoverFavicons error: %v", err)
 	}
 
-	// Should have at minimum: 2 from link tags + 1 from manifest + 2 fallbacks + 1 Google API = 6
+	// Should have at minimum: 2 from link tags + 1 from manifest + 2 fallbacks + 1 Vemetric API = 6
 	if len(sources) < 6 {
 		t.Errorf("expected at least 6 sources, got %d", len(sources))
+	}
+
+	parsedServer, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatalf("parse test server URL: %v", err)
+	}
+	if got, want := fallbackAPIURL(t, sources), "https://favicon.vemetric.com/"+parsedServer.Hostname()+"?size=64"; got != want {
+		t.Errorf("fallback API URL = %q, want %q", got, want)
 	}
 
 	// First source should be highest score
 	if sources[0].Score <= sources[len(sources)-1].Score {
 		t.Error("sources should be sorted by score descending")
 	}
+}
+
+func TestDiscoverFaviconsVemetricFallbackSize(t *testing.T) {
+	server := httptest.NewServer(http.NotFoundHandler())
+	defer server.Close()
+
+	opts := DefaultOptions(
+		WithBlockPrivateIPs(false),
+		WithSize(128),
+		WithVemetricAPIHost("favicons.example.test:8443"),
+	)
+	opts.HTTPClient = server.Client()
+
+	sources, err := discoverFavicons(context.Background(), server.URL, opts)
+	if err != nil {
+		t.Fatalf("discoverFavicons error: %v", err)
+	}
+
+	parsedServer, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatalf("parse test server URL: %v", err)
+	}
+	if got, want := fallbackAPIURL(t, sources), "https://favicons.example.test:8443/"+parsedServer.Hostname()+"?size=128"; got != want {
+		t.Errorf("fallback API URL = %q, want %q", got, want)
+	}
+}
+
+func fallbackAPIURL(t *testing.T, sources []faviconSource) string {
+	t.Helper()
+	for _, source := range sources {
+		if source.Source == sourceFallbackAPI {
+			return source.URL
+		}
+	}
+	t.Fatal("fallback API source not found")
+	return ""
 }
 
 func TestDiscoverFaviconsNoFallbackAPI(t *testing.T) {
@@ -1059,7 +1157,7 @@ func TestFetchNoFavicon(t *testing.T) {
 	}))
 	defer server.Close()
 
-	// Disable Google fallback so we get a clean "not found"
+	// Disable Vemetric fallback so we get a clean "not found"
 	_, err := Fetch(context.Background(), server.URL, WithBlockPrivateIPs(false), WithFallbackAPI(false), WithTimeout(3*time.Second))
 	if err == nil {
 		t.Error("expected error when no favicon found")

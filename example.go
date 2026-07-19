@@ -20,7 +20,7 @@ import (
 
 func main() {
 	ctx := context.Background()
-	domain := "gmail.com"
+	domain := "stackoverflow.com"
 
 	// Temporary output directory (relative to this source file).
 	_, thisFile, _, _ := runtime.Caller(0)
@@ -136,6 +136,7 @@ func main() {
 	fmt.Println("=== 9. Browser mode: Chromium-style tab favicon ===")
 	browser, err := favifetch.Fetch(ctx, domain,
 		favifetch.WithMode(favifetch.ModeBrowser),
+		favifetch.WithFallbackAPI(true),
 	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)

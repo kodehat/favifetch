@@ -2,7 +2,7 @@
 //
 // It automatically finds the best favicon from a website by checking
 // HTML <link> tags, web app manifests, common fallback locations,
-// and optionally Google's favicon API.
+// and optionally Vemetric's favicon API.
 //
 // Basic usage:
 //

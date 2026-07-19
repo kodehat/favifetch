@@ -3,7 +3,7 @@
 > **Based on [Vemetric/favicon-api](https://github.com/Vemetric/favicon-api)** — a TypeScript/Bun favicon API service.  
 > `favifetch` is the Go library version of the same concept.
 
-A Go library for discovering and fetching website favicons. Automatically finds the best favicon from HTML `<link>` tags, web app manifests, common fallback locations, and optionally Google's favicon API.
+A Go library for discovering and fetching website favicons. Automatically finds the best favicon from HTML `<link>` tags, web app manifests, common fallback locations, and optionally Vemetric's favicon API.
 
 ## Features
 
@@ -13,7 +13,7 @@ A Go library for discovering and fetching website favicons. Automatically finds 
 - **Image Processing** — Resize to any pixel size and convert between PNG, JPG, WebP
 - **SSRF Protection** — Blocks requests to private IPs by default
 - **Domain Mappings** — Maps app package names (e.g. `com.pinterest`) to canonical domains
-- **Google API Fallback** — Optionally uses Google's `s2/favicons` as a last-resort source
+- **Vemetric API Fallback** — Optionally uses Vemetric's `favicon.vemetric.com` as a last-resort source
 - **Browser Mode** — Selects the regular favicon Chromium would use for a 16px desktop tab from the initial HTML
 - **Context Support** — Full `context.Context` integration for cancellation and timeouts
 - **Zero cgo** — Pure Go image processing (no Sharp/Node dependency)
@@ -93,12 +93,20 @@ result, err := favifetch.Fetch(ctx, "example.com",
 )
 ```
 
-Disable Google API fallback and SSRF protection:
+Disable Vemetric API fallback and SSRF protection:
 
 ```go
 result, err := favifetch.Fetch(ctx, "internal.company.com",
     favifetch.WithFallbackAPI(false),
     favifetch.WithBlockPrivateIPs(false),
+)
+```
+
+Use a self-hosted Vemetric-compatible API (HTTPS is used; a port is optional):
+
+```go
+result, err := favifetch.Fetch(ctx, "example.com",
+    favifetch.WithVemetricAPIHost("favicons.example.com:8443"),
 )
 ```
 
@@ -114,11 +122,14 @@ result, err := favifetch.Fetch(ctx, "example.com",
 ```
 
 Browser mode considers only HTML `<link rel="icon">` candidates and falls back
-to `/favicon.ico` only when the page declares none. It honors the final page URL
-and `<base href>`, returns the original downloaded bytes, and cannot be combined
-with `WithSize` or `WithFormat`. It does not execute JavaScript or reproduce a
-browser session's cookies and other runtime state.
-It always uses a Chromium-like User-Agent; `WithUserAgent` is ignored in this mode.
+to `/favicon.ico` only when the page declares none. When `WithFallbackAPI(true)`
+(the default) is enabled, it uses the Vemetric API only after those candidates
+fail, or immediately when the initial HTML request fails (for example, a 403).
+It honors the final page URL and `<base href>`, returns the original downloaded
+bytes, and cannot be combined with `WithSize` or `WithFormat`. It does not
+execute JavaScript or reproduce a browser session's cookies and other runtime
+state. It always uses a Chromium-like User-Agent; `WithUserAgent` is ignored in
+this mode.
 
 ### Discovery Only
 
@@ -135,7 +146,7 @@ for _, s := range sources {
 // [manifest] score=40 size=192 https://github.githubassets.com/assets/icon-192.png
 // [fallback] score=20 https://github.com/apple-touch-icon.png
 // [fallback] score=10 https://github.com/favicon.ico
-// [fallback-api] score=1 https://www.google.com/s2/favicons?...
+// [fallback-api] score=1 https://favicon.vemetric.com/github.com?size=64
 ```
 
 ## API Reference
@@ -179,7 +190,8 @@ type DiscoveredSource struct {
 | `WithMaxImageSize(n)` | `5MB` | Max favicon size to accept |
 | `WithMaxRedirects(n)` | `5` | Max HTTP redirects |
 | `WithBlockPrivateIPs(bool)` | `true` | Block private IP ranges |
-| `WithFallbackAPI(bool)` | `true` | Use Google favicon API fallback |
+| `WithFallbackAPI(bool)` | `true` | Use Vemetric favicon API fallback |
+| `WithVemetricAPIHost(host)` | `favicon.vemetric.com` | Set Vemetric-compatible API host (HTTPS) |
 | `WithSize(px)` | `0` | Resize to px×px (0 = no resize) |
 | `WithFormat(f)` | `TargetUnspecified` | Convert to `TargetPNG`, `TargetJPEG`, or `TargetWebP` |
 | `WithHTTPClient(c)` | `http.DefaultClient` | Custom HTTP client |
@@ -192,7 +204,7 @@ The library searches these sources in priority order:
 1. **HTML `<link>` tags** — `<link rel="icon">`, `<link rel="apple-touch-icon">`, `<link rel="mask-icon">`
 2. **Web App Manifest** — `manifest.json` icons array
 3. **Common fallbacks** — `/apple-touch-icon.png` (score 20), `/favicon.ico` (score 10)
-4. **Google API** — `google.com/s2/favicons` (score 1, optional)
+4. **Vemetric API** — `favicon.vemetric.com/<domain>?size=<n>` (score 1, optional)
 
 Scoring weights SVG (+100), large sizes (+90 for ≥512px), PNG (+20), WebP (+15), and apple-touch-icon (+10). Mask icons are penalized (−10).
 
